@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 class MyClient(discord.Client):
     async def on_ready(self):
-        print('Logged on as', self.user)
+        print("Logged on as", self.user)
 
     async def on_message(self, message):
         print(message)
@@ -13,8 +13,8 @@ class MyClient(discord.Client):
         if message.author == self.user:
             return
 
-        if message.content == 'ping':
-            await message.channel.send('pong')
+        if message.content == "ping":
+            await message.channel.send("pong")
 
 
 def format_timedelta(td):
@@ -37,19 +37,19 @@ intents.message_content = True
 intents.members = True
 intents.guild_messages = True
 
-bot = commands.Bot(command_prefix='>', intents=intents)
+bot = commands.Bot(command_prefix=">", intents=intents)
 
 
 @bot.command()
 async def ping(ctx):
-    await ctx.send('pong')
+    await ctx.send("pong")
 
 
 @bot.command()
 async def activity(ctx):
     await ctx.send("Scanning message history. This may take a moment...")
 
-    last_message = {}   # user_id -> datetime
+    last_message = {}  # user_id -> datetime
     message_count = {}  # user_id -> int
 
     for channel in ctx.guild.text_channels:
@@ -89,7 +89,14 @@ async def activity(ctx):
         else:
             ago_str = "No messages found"
 
-        rows.append((member.display_name, ago_str, count, last or datetime.fromtimestamp(0, tz=timezone.utc)))
+        rows.append(
+            (
+                member.display_name,
+                ago_str,
+                count,
+                last or datetime.fromtimestamp(0, tz=timezone.utc),
+            )
+        )
 
     # Sort by last activity (most recent first)
     rows.sort(key=lambda x: x[3], reverse=True)
@@ -115,5 +122,7 @@ async def activity(ctx):
 with open("token.secret") as file:
     TOKEN = file.read().rstrip()
 
-client = MyClient(intents=intents)
-client.run(TOKEN)
+# client = MyClient(intents=intents)
+# client.run(TOKEN)
+
+bot.run(TOKEN)
