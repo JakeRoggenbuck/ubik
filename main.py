@@ -25,6 +25,7 @@ if not BOT_CONFIG_PATH.exists():
 BOT_CONFIG = load_bot_config(BOT_CONFIG_PATH)
 
 CHANNEL_ID = int(BOT_CONFIG["channel_id"])
+INVITE_LINK = str(BOT_CONFIG.get("invite_link", "")).strip()
 
 if "token" in BOT_CONFIG:
     TOKEN = str(BOT_CONFIG["token"]).strip()
@@ -108,6 +109,16 @@ async def commit(ctx):
         return
 
     await ctx.send(result.stdout.strip())
+
+
+@bot.command()
+async def link(ctx):
+    """Share the bot invite link."""
+    if not INVITE_LINK:
+        await ctx.send("Invite link is not configured.")
+        return
+
+    await ctx.send("Invite Ubik to a server using the link: " + INVITE_LINK)
 
 
 bot.run(TOKEN)
