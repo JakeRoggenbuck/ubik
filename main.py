@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from datetime import datetime, timezone
+from collections import defaultdict
 
 
 class MyClient(discord.Client):
@@ -46,77 +47,54 @@ async def ping(ctx):
 
 
 @bot.command()
-async def activity(ctx):
-    await ctx.send("Scanning message history. This may take a moment...")
+async def activity(ctx, limit: int = 1000):
+    """
+    DM the requesting user a list of all users, their last message time, and total messages.
+    limit: how many messages per channel to scan (default 1000)
+    """
+    await ctx.send("Collecting data, this may take a moment...")
 
-    last_message = {}  # user_id -> datetime
-    message_count = {}  # user_id -> int
+    members = {member.id: member for member in ctx.guild.members if not member.bot}
+    message_counts = defaultdict(int)
+    last_messages = {}
 
+    # Loop through all text channels
     for channel in ctx.guild.text_channels:
         try:
-            async for msg in channel.history(limit=None, oldest_first=False):
-                if msg.author.bot:
+            async for message in channel.history(limit=limit):
+                if message.author.bot:
                     continue
-
-                uid = msg.author.id
-                ts = msg.created_at
-
-                # update last message time
-                if uid not in last_message or ts > last_message[uid]:
-                    last_message[uid] = ts
-
-                # increment message count
-                message_count[uid] = message_count.get(uid, 0) + 1
-
+                message_counts[message.author.id] += 1
+                # Update last message timestamp if this message is newer
+                if message.author.id not in last_messages or message.created_at > last_messages[message.author.id]:
+                    last_messages[message.author.id] = message.created_at
         except discord.Forbidden:
-            # bot can't read this channel
-            continue
+            continue  # Skip channels the bot can't read
+        except discord.HTTPException:
+            continue  # Skip on rate limit or errors
 
-    # Build output for all members
-    rows = []
-    now = datetime.now(timezone.utc)
-
-    for member in ctx.guild.members:
-        if member.bot:
-            continue
-
-        last = last_message.get(member.id)
-        count = message_count.get(member.id, 0)
-
-        if last:
-            ago = now - last
-            ago_str = format_timedelta(ago)
+    report_lines = []
+    for member_id, member in members.items():
+        last_msg_time = last_messages.get(member_id, None)
+        total_msgs = message_counts.get(member_id, 0)
+        if last_msg_time:
+            time_since_last = discord.utils.format_dt(last_msg_time, style='R')  # Relative time
         else:
-            ago_str = "No messages found"
+            time_since_last = "No messages found"
+        report_lines.append(f"{member.name}#{member.discriminator}: Last message {time_since_last}, Total messages: {total_msgs}")
 
-        rows.append(
-            (
-                member.display_name,
-                ago_str,
-                count,
-                last or datetime.fromtimestamp(0, tz=timezone.utc),
-            )
-        )
+    # Split into chunks if too long
+    chunk_size = 2000
+    report_text = "\n".join(report_lines)
+    chunks = [report_text[i:i+chunk_size] for i in range(0, len(report_text), chunk_size)]
 
-    # Sort by last activity (most recent first)
-    rows.sort(key=lambda x: x[3], reverse=True)
-
-    # Build readable output
-    result_lines = [
-        f"{name}: Last message {ago}, Total messages {count}"
-        for name, ago, count, _ in rows
-    ]
-
-    # Discord messages have a 2000-character limit — chunk it
-    chunk = ""
-    for line in result_lines:
-        if len(chunk) + len(line) + 1 > 1990:
-            await ctx.send(f"```{chunk}```")
-            chunk = ""
-        chunk += line + "\n"
-
-    if chunk:
-        await ctx.send(f"```{chunk}```")
+    # Send DM to user
+    try:
+        for chunk in chunks:
+            await ctx.author.send(chunk)
+        await ctx.send("✅ Check your DMs for the activity report!")
+    except discord.Forbidden:
+        await ctx.send("❌ I couldn't DM you. Do you have DMs disabled?")
 
 
 with open("token.secret") as file:
