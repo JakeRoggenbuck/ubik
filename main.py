@@ -3,7 +3,7 @@ from discord.ext import commands
 from pathlib import Path
 import tomllib
 import kronicler
-import activity
+import activities
 import birthday
 import kronicler_report
 import subprocess
@@ -77,7 +77,7 @@ async def ping(ctx):
 @bot.command()
 async def activity(ctx, limit: int = 1000):
     """See how much activity each person has on a server by message count."""
-    await activity.get_activity(ctx, limit)
+    await activities.get_activity(ctx, limit)
 
 
 @bot.command()
