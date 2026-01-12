@@ -5,16 +5,21 @@ from datetime import time, timezone, timedelta, datetime
 from pathlib import Path
 import tomllib
 import random
+import kronicler
 
 
 BOT_CONFIG_PATH = Path("bot.toml")
 BIRTHDAYS_PATH = Path("birthdays.toml")
 
+DB = kronicler.Database(sync_consume=True)
 
+
+@kronicler.capture
 def load_bot_config(path: Path) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
+@kronicler.capture
 def load_birthdays(path: Path) -> dict[tuple[int, int], tuple[int, str]]:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
 
@@ -71,6 +76,12 @@ intents.guild_messages = True
 bot = commands.Bot(command_prefix=">", intents=intents)
 
 
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    daily_birthday_check.start()
+
+
 def format_timedelta(td):
     secs = int(td.total_seconds())
     days, secs = divmod(secs, 86400)
@@ -86,19 +97,8 @@ def format_timedelta(td):
     return f"{secs}s ago"
 
 
-@bot.command()
-async def ping(ctx):
-    await ctx.send("pong")
-
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-    daily_birthday_check.start()
-
-
-@bot.command()
-async def activity(ctx, limit: int = 1000):
+@kronicler.capture
+async def get_activity(ctx, limit: int):
     await ctx.send("Collecting data, this may take a moment...")
 
     members = {member.id: member for member in ctx.guild.members if not member.bot}
@@ -153,8 +153,23 @@ async def activity(ctx, limit: int = 1000):
         await ctx.send("❌ I couldn't DM you. Do you have DMs disabled?")
 
 
-@tasks.loop(time=time(hour=12, minute=0, tzinfo=MY_TIMEZONE))
-async def daily_birthday_check():
+@bot.command()
+async def ping(ctx):
+    await ctx.send("pong")
+
+
+@bot.command()
+async def activity(ctx, limit: int = 1000):
+    await get_activity(ctx, limit)
+
+
+@bot.command()
+async def list_birthdays(ctx):
+    await ctx.send(load_birthdays(BIRTHDAYS_PATH))
+
+
+@kronicler.capture
+async def get_daily_birthday_check():
     now = datetime.now()
 
     if (bday := (now.month, now.day)) in BIRTHDAYS:
@@ -167,6 +182,11 @@ async def daily_birthday_check():
             await channel.send(file=discord.File("./images/birthday ubik.jpg"))
         else:
             print(f"Could not find channel with ID {CHANNEL_ID}")
+
+
+@tasks.loop(time=time(hour=12, minute=0, tzinfo=MY_TIMEZONE))
+async def daily_birthday_check():
+    await get_daily_birthday_check()
 
 
 bot.run(TOKEN)
