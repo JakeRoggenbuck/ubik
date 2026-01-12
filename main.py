@@ -7,9 +7,12 @@ import tomllib
 import random
 
 
-CHANNEL_ID = 1416214869090238506
-
+BOT_CONFIG_PATH = Path("bot.toml")
 BIRTHDAYS_PATH = Path("birthdays.toml")
+
+
+def load_bot_config(path: Path) -> dict:
+    return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
 def load_birthdays(path: Path) -> dict[tuple[int, int], tuple[int, str]]:
@@ -27,8 +30,25 @@ def load_birthdays(path: Path) -> dict[tuple[int, int], tuple[int, str]]:
     return birthdays
 
 
+if not BOT_CONFIG_PATH.exists():
+    raise FileNotFoundError(f"The file {BOT_CONFIG_PATH} not found.")
+
 if not BIRTHDAYS_PATH.exists():
     raise FileNotFoundError(f"The file {BIRTHDAYS_PATH} not found.")
+
+BOT_CONFIG = load_bot_config(BOT_CONFIG_PATH)
+
+CHANNEL_ID = int(BOT_CONFIG["channel_id"])
+
+if "token" in BOT_CONFIG:
+    TOKEN = str(BOT_CONFIG["token"]).strip()
+elif "token_secret" in BOT_CONFIG:
+    token_path = Path(str(BOT_CONFIG["token_secret"]))
+    TOKEN = token_path.read_text(encoding="utf-8").rstrip()
+else:
+    raise KeyError(
+        "Missing token configuration; set 'token' or 'token_secret' in bot.toml."
+    )
 
 
 BIRTHDAYS = load_birthdays(BIRTHDAYS_PATH)
@@ -133,7 +153,7 @@ async def activity(ctx, limit: int = 1000):
         await ctx.send("❌ I couldn't DM you. Do you have DMs disabled?")
 
 
-@tasks.loop(time=time(hour=12, minute=0, tzinfo=MY_TIMEZONE))
+@tasks.loop(time=time(hour=20, minute=50, tzinfo=MY_TIMEZONE))
 async def daily_birthday_check():
     now = datetime.now()
 
@@ -148,8 +168,5 @@ async def daily_birthday_check():
         else:
             print(f"Could not find channel with ID {CHANNEL_ID}")
 
-
-with open("token.secret") as file:
-    TOKEN = file.read().rstrip()
 
 bot.run(TOKEN)
