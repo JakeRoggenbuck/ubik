@@ -133,7 +133,7 @@ async def activity(ctx, limit: int = 1000):
         await ctx.send("❌ I couldn't DM you. Do you have DMs disabled?")
 
 
-@tasks.loop(time=time(hour=20, minute=29, tzinfo=MY_TIMEZONE))
+@tasks.loop(time=time(hour=12, minute=0, tzinfo=MY_TIMEZONE))
 async def daily_birthday_check():
     now = datetime.now()
 
