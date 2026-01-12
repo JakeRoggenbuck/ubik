@@ -5,6 +5,7 @@ import tomllib
 import kronicler
 import activity
 import birthday
+import kronicler_report
 import subprocess
 
 
@@ -84,6 +85,12 @@ async def birthdays(ctx):
     """List everyone's birthday"""
     birthdays = birthday.load_birthdays(birthday.BIRTHDAYS_PATH)
     await ctx.send(birthday.format_birthdays(birthdays))
+
+
+@bot.command()
+async def kronicler(ctx):
+    """Show the kronicler data"""
+    await kronicler_report.send_runtime_plot(ctx, DB)
 
 
 @bot.command()
