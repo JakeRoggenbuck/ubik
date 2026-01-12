@@ -98,6 +98,19 @@ def format_timedelta(td):
 
 
 @kronicler.capture
+def format_birthdays(birthdays: dict[tuple[int, int], tuple[int, str]]) -> str:
+    if not birthdays:
+        return "No birthdays configured."
+
+    lines = []
+    for (month, day), (_, name) in sorted(birthdays.items()):
+        lines.append(f"{month:02d}/{day:02d}  {name}")
+
+    header = f"Birthdays ({len(lines)}):"
+    return "\n".join([header, "```", *lines, "```"])
+
+
+@kronicler.capture
 async def get_activity(ctx, limit: int):
     await ctx.send("Collecting data, this may take a moment...")
 
@@ -165,7 +178,8 @@ async def activity(ctx, limit: int = 1000):
 
 @bot.command()
 async def list_birthdays(ctx):
-    await ctx.send(load_birthdays(BIRTHDAYS_PATH))
+    birthdays = load_birthdays(BIRTHDAYS_PATH)
+    await ctx.send(format_birthdays(birthdays))
 
 
 @kronicler.capture
