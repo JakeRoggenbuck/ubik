@@ -5,6 +5,7 @@ import tomllib
 import kronicler
 import activity
 import birthday
+import subprocess
 
 
 BOT_CONFIG_PATH = Path("bot.toml")
@@ -83,6 +84,23 @@ async def birthdays(ctx):
     """List everyone's birthday"""
     birthdays = birthday.load_birthdays(birthday.BIRTHDAYS_PATH)
     await ctx.send(birthday.format_birthdays(birthdays))
+
+
+@bot.command()
+async def commit(ctx):
+    """Show the latest commit hash and commit date."""
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%h %cd", "--date=short"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        await ctx.send("Unable to read the latest commit hash.")
+        return
+
+    await ctx.send(result.stdout.strip())
 
 
 bot.run(TOKEN)
