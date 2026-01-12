@@ -1,15 +1,13 @@
 import discord
-from discord.ext import commands, tasks
-from collections import defaultdict
-from datetime import time, timezone, timedelta, datetime
+from discord.ext import commands
 from pathlib import Path
 import tomllib
-import random
 import kronicler
+import activity
+import birthday
 
 
 BOT_CONFIG_PATH = Path("bot.toml")
-BIRTHDAYS_PATH = Path("birthdays.toml")
 
 DB = kronicler.Database(sync_consume=True)
 
@@ -19,27 +17,8 @@ def load_bot_config(path: Path) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
-@kronicler.capture
-def load_birthdays(path: Path) -> dict[tuple[int, int], tuple[int, str]]:
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
-
-    birthdays: dict[tuple[int, int], tuple[int, str]] = {}
-
-    for entry in data.get("birthdays", []):
-        month = int(entry["month"])
-        day = int(entry["day"])
-        user_id = int(entry["user_id"])
-        name = str(entry["name"])
-        birthdays[(month, day)] = (user_id, name)
-
-    return birthdays
-
-
 if not BOT_CONFIG_PATH.exists():
     raise FileNotFoundError(f"The file {BOT_CONFIG_PATH} not found.")
-
-if not BIRTHDAYS_PATH.exists():
-    raise FileNotFoundError(f"The file {BIRTHDAYS_PATH} not found.")
 
 BOT_CONFIG = load_bot_config(BOT_CONFIG_PATH)
 
@@ -56,24 +35,14 @@ else:
     )
 
 
-BIRTHDAYS = load_birthdays(BIRTHDAYS_PATH)
-
-PARTY = "🎉"
-CAKE = "🎂"
-
-BIRTHDAY_MESSAGE = [
-    f"Make sure to bring some cake! {CAKE}",
-    f"Whoooh!! {PARTY}",
-]
-
-MY_TIMEZONE = timezone(timedelta(hours=-8))
-
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.guild_messages = True
 
 bot = commands.Bot(command_prefix=">", intents=intents)
+
+daily_birthday_check = birthday.create_daily_birthday_check(bot, CHANNEL_ID)
 
 
 @bot.event
@@ -97,110 +66,23 @@ def format_timedelta(td):
     return f"{secs}s ago"
 
 
-@kronicler.capture
-def format_birthdays(birthdays: dict[tuple[int, int], tuple[int, str]]) -> str:
-    if not birthdays:
-        return "No birthdays configured."
-
-    lines = []
-    for (month, day), (_, name) in sorted(birthdays.items()):
-        lines.append(f"{month:02d}/{day:02d}  {name}")
-
-    header = f"Birthdays ({len(lines)}):"
-    return "\n".join([header, "```", *lines, "```"])
-
-
-@kronicler.capture
-async def get_activity(ctx, limit: int):
-    await ctx.send("Collecting data, this may take a moment...")
-
-    members = {member.id: member for member in ctx.guild.members if not member.bot}
-    message_counts = defaultdict(int)
-    last_messages = {}
-
-    # Loop through all text channels
-    for channel in ctx.guild.text_channels:
-        try:
-            async for message in channel.history(limit=limit):
-                if message.author.bot:
-                    continue
-                message_counts[message.author.id] += 1
-                # Update last message timestamp if this message is newer
-                if (
-                    message.author.id not in last_messages
-                    or message.created_at > last_messages[message.author.id]
-                ):
-                    last_messages[message.author.id] = message.created_at
-        except discord.Forbidden:
-            continue  # Skip channels the bot can't read
-        except discord.HTTPException:
-            continue  # Skip on rate limit or errors
-
-    report_lines = []
-    for member_id, member in members.items():
-        last_msg_time = last_messages.get(member_id, None)
-        total_msgs = message_counts.get(member_id, 0)
-        if last_msg_time:
-            time_since_last = discord.utils.format_dt(
-                last_msg_time, style="R"
-            )  # Relative time
-        else:
-            time_since_last = "No messages found"
-        report_lines.append(
-            f"{member.name}#{member.discriminator}: Last message {time_since_last}, Total messages: {total_msgs}"
-        )
-
-    # Split into chunks if too long
-    chunk_size = 2000
-    report_text = "\n".join(report_lines)
-    chunks = [
-        report_text[i : i + chunk_size] for i in range(0, len(report_text), chunk_size)
-    ]
-
-    # Send DM to user
-    try:
-        for chunk in chunks:
-            await ctx.author.send(chunk)
-        await ctx.send("✅ Check your DMs for the activity report!")
-    except discord.Forbidden:
-        await ctx.send("❌ I couldn't DM you. Do you have DMs disabled?")
-
-
 @bot.command()
 async def ping(ctx):
+    """Use the >ping command to see if Ubik is working..."""
     await ctx.send("pong")
 
 
 @bot.command()
 async def activity(ctx, limit: int = 1000):
-    await get_activity(ctx, limit)
+    """See how much activity each person has on a server by message count."""
+    await activity.get_activity(ctx, limit)
 
 
 @bot.command()
-async def list_birthdays(ctx):
-    birthdays = load_birthdays(BIRTHDAYS_PATH)
-    await ctx.send(format_birthdays(birthdays))
-
-
-@kronicler.capture
-async def get_daily_birthday_check():
-    now = datetime.now()
-
-    if (bday := (now.month, now.day)) in BIRTHDAYS:
-        user = BIRTHDAYS[bday]
-
-        channel = bot.get_channel(CHANNEL_ID)
-        if channel:
-            await channel.send(f"Happy Birthday {user[1]}!! <@{user[0]}>")
-            await channel.send(random.choice(BIRTHDAY_MESSAGE))
-            await channel.send(file=discord.File("./images/birthday ubik.jpg"))
-        else:
-            print(f"Could not find channel with ID {CHANNEL_ID}")
-
-
-@tasks.loop(time=time(hour=12, minute=0, tzinfo=MY_TIMEZONE))
-async def daily_birthday_check():
-    await get_daily_birthday_check()
+async def birthdays(ctx):
+    """List everyone's birthday"""
+    birthdays = birthday.load_birthdays(birthday.BIRTHDAYS_PATH)
+    await ctx.send(birthday.format_birthdays(birthdays))
 
 
 bot.run(TOKEN)
