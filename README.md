@@ -1,5 +1,7 @@
 # ubik
 
+<img width="102.4" height="153.6" alt="zany ubik" src="https://github.com/user-attachments/assets/2f59fec4-652d-4284-87af-718fe4e5ad5f" />
+
 ## Setup
 
 1. Create an application in the Discord Developer Portal.
