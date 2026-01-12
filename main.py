@@ -133,7 +133,7 @@ async def activity(ctx, limit: int = 1000):
         await ctx.send("❌ I couldn't DM you. Do you have DMs disabled?")
 
 
-@tasks.loop(time=time(hour=20, minute=25, tzinfo=MY_TIMEZONE))
+@tasks.loop(time=time(hour=20, minute=29, tzinfo=MY_TIMEZONE))
 async def daily_birthday_check():
     now = datetime.now()
 
@@ -144,6 +144,7 @@ async def daily_birthday_check():
         if channel:
             await channel.send(f"Happy Birthday {user[1]}!! <@{user[0]}>")
             await channel.send(random.choice(BIRTHDAY_MESSAGE))
+            await channel.send(file=discord.File("./images/birthday ubik.jpg"))
         else:
             print(f"Could not find channel with ID {CHANNEL_ID}")
 
