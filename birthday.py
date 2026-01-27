@@ -78,3 +78,14 @@ def create_daily_birthday_check(bot: discord.Client, channel_id: int):
         await get_daily_birthday_check(bot, channel_id)
 
     return daily_birthday_check
+
+
+@kronicler.capture
+async def send_birthday_channel_check(bot: discord.Client, channel_id: int) -> bool:
+    channel = bot.get_channel(channel_id)
+    if channel:
+        await channel.send("We will send birthday announcements here.")
+        return True
+
+    print(f"Could not find channel with ID {channel_id}")
+    return False

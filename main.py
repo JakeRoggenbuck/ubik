@@ -88,6 +88,25 @@ async def birthdays(ctx):
     await ctx.send(birthday.format_birthdays(birthdays))
 
 
+@bot.group(name="birthday", invoke_without_command=True)
+async def birthday_group(ctx):
+    """Birthday utilities."""
+    await ctx.send("Use `>birthday channel check` to verify the announcements channel.")
+
+
+@birthday_group.group(name="channel", invoke_without_command=True)
+async def birthday_channel(ctx):
+    """Birthday channel utilities."""
+    await ctx.send("Use `>birthday channel check` to verify the announcements channel.")
+
+
+@birthday_channel.command(name="check")
+async def birthday_channel_check(ctx):
+    """Send a test message to the birthday announcements channel."""
+    if not await birthday.send_birthday_channel_check(bot, CHANNEL_ID):
+        await ctx.send("Unable to find the birthday announcements channel.")
+
+
 @bot.command()
 async def kronicler(ctx):
     """Show the kronicler data"""
