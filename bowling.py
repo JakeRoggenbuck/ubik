@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 import csv
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -110,28 +109,6 @@ def format_speed(value: float) -> str:
     return f"{value:.2f} mph"
 
 
-def compute_strike_streak(
-    records: list[BowlingRecord],
-) -> tuple[int, Optional[int], Optional[str]]:
-    records_sorted = sorted(records, key=lambda record: record.timestamp)
-    current_streaks: dict[int, int] = defaultdict(int)
-    max_streak = 0
-    max_user_id: Optional[int] = None
-    max_user_name: Optional[str] = None
-
-    for record in records_sorted:
-        if record.record_type == "strike":
-            current_streaks[record.user_id] += 1
-            if current_streaks[record.user_id] > max_streak:
-                max_streak = current_streaks[record.user_id]
-                max_user_id = record.user_id
-                max_user_name = record.user_name
-        else:
-            current_streaks[record.user_id] = 0
-
-    return max_streak, max_user_id, max_user_name
-
-
 def parse_add_args(args: tuple[str, ...]) -> tuple[Optional[dict], Optional[str]]:
     if len(args) < 2:
         return None, "Usage: `>bowling add score 170`, `>bowling add speed 22`, or `>bowling add strike speed 22`."
@@ -197,6 +174,7 @@ def format_bowling_records(records: list[BowlingRecord], guild: Optional[discord
 
     strike_records = [record for record in records if record.record_type == "strike"]
     speed_records = [record for record in records if record.record_type == "speed"]
+    streak_records = [record for record in records if record.record_type == "streak"]
 
     lines.append("")
     if strike_records:
@@ -210,8 +188,9 @@ def format_bowling_records(records: list[BowlingRecord], guild: Optional[discord
     else:
         lines.append("Slowest Strike: n/a")
 
-    if speed_records:
-        fastest_bowl = max(speed_records, key=lambda record: record.value)
+    bowl_candidates = speed_records + strike_records
+    if bowl_candidates:
+        fastest_bowl = max(bowl_candidates, key=lambda record: record.value)
         fastest_bowl_name = resolve_user_name(
             guild, fastest_bowl.user_id, fastest_bowl.user_name
         )
@@ -232,10 +211,12 @@ def format_bowling_records(records: list[BowlingRecord], guild: Optional[discord
     else:
         lines.append("Fastest Strike: n/a")
 
-    streak, streak_user_id, streak_user_name = compute_strike_streak(records)
-    if streak and streak_user_id is not None:
-        streak_name = resolve_user_name(guild, streak_user_id, streak_user_name or "")
-        lines.append(f"Most strikes in a row: {streak} - {streak_name}")
+    if streak_records:
+        top_streak = max(streak_records, key=lambda record: record.value)
+        streak_name = resolve_user_name(
+            guild, top_streak.user_id, top_streak.user_name
+        )
+        lines.append(f"Most strikes in a row: {int(top_streak.value)} - {streak_name}")
     else:
         lines.append("Most strikes in a row: n/a")
 
@@ -249,7 +230,7 @@ class Bowling(commands.Cog):
     @commands.group(name="bowling", invoke_without_command=True)
     async def bowling_group(self, ctx: commands.Context):
         await ctx.send(
-            "Use `>bowling add score 170`, `>bowling add speed 22`, `>bowling add strike speed 22`, or `>bowling stats`."
+            "Use `>bowling add score 170`, `>bowling add speed 22`, `>bowling add strike speed 22`, `>bowling strike streak 3`, or `>bowling stats`."
         )
 
     @bowling_group.group(name="add", invoke_without_command=True)
@@ -287,6 +268,32 @@ class Bowling(commands.Cog):
             await ctx.send("No bowling records yet. Add one with `>bowling add`.")
             return
         await ctx.send(format_bowling_records(records, ctx.guild))
+
+    @bowling_group.group(name="strike", invoke_without_command=True)
+    async def bowling_strike(self, ctx: commands.Context):
+        await ctx.send("Use `>bowling strike streak 3` to record a strike streak.")
+
+    @bowling_strike.command(name="streak")
+    async def bowling_strike_streak(
+        self, ctx: commands.Context, count: Optional[int] = None
+    ):
+        if count is None:
+            await ctx.send("Usage: `>bowling strike streak 3`.")
+            return
+        if count <= 0:
+            await ctx.send("Streak must be greater than zero.")
+            return
+
+        record = BowlingRecord(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            user_id=ctx.author.id,
+            user_name=ctx.author.display_name,
+            record_type="streak",
+            value=float(count),
+            unit="strikes",
+        )
+        append_bowling_record(record)
+        await ctx.send(f"Added strike streak {count} for {record.user_name}.")
 
     @bowling_group.group(name="delete", invoke_without_command=True)
     async def bowling_delete(self, ctx: commands.Context):

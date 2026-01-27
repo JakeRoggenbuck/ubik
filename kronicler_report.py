@@ -55,6 +55,7 @@ def create_runtime_plot(log_data: list[list]) -> io.BytesIO:
         fontsize=14,
         fontweight="bold",
     )
+    ax.set_yscale("log")
     ax.set_xticks(list(x_pos))
     ax.set_xticklabels(functions, rotation=45, ha="right")
     ax.grid(axis="y", alpha=0.3, linestyle="--")
@@ -64,10 +65,18 @@ def create_runtime_plot(log_data: list[list]) -> io.BytesIO:
     ):
         height = bar.get_height()
         ax.text(
-            bar.get_x() + bar.get_width() / 2.0,
-            height + stds[i] + 5,
+            bar.get_x() + bar.get_width() * 0.95,
+            height,
+            f"{height:.2f}",
+            ha="right",
+            va="bottom",
+            fontsize=8,
+        )
+        ax.text(
+            bar.get_x() + bar.get_width() * 0.05,
+            height,
             f"n={count}",
-            ha="center",
+            ha="left",
             va="bottom",
             fontsize=9,
         )
