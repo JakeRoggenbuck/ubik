@@ -64,7 +64,7 @@ def create_runtime_plot(log_data: list[list]) -> io.BytesIO:
         x_pos,
         means,
         yerr=stds,
-        capsize=10,
+        capsize=0,
         alpha=0.75,
         color=bar_colors,
         ecolor="#ffffff",

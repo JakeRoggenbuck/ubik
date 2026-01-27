@@ -8,6 +8,7 @@ from typing import Optional
 
 import discord
 from discord.ext import commands
+import kronicler
 
 
 BOWLING_DB_PATH = Path("bowling_records.csv")
@@ -24,6 +25,7 @@ class BowlingRecord:
     unit: str
 
 
+@kronicler.capture
 def ensure_bowling_db(path: Path) -> None:
     if path.exists():
         return
@@ -32,6 +34,7 @@ def ensure_bowling_db(path: Path) -> None:
         writer.writeheader()
 
 
+@kronicler.capture
 def append_bowling_record(record: BowlingRecord, path: Path = BOWLING_DB_PATH) -> None:
     ensure_bowling_db(path)
     with path.open("a", newline="", encoding="utf-8") as handle:
@@ -48,6 +51,7 @@ def append_bowling_record(record: BowlingRecord, path: Path = BOWLING_DB_PATH) -
         )
 
 
+@kronicler.capture
 def load_bowling_records(path: Path = BOWLING_DB_PATH) -> list[BowlingRecord]:
     if not path.exists():
         return []
@@ -68,6 +72,7 @@ def load_bowling_records(path: Path = BOWLING_DB_PATH) -> list[BowlingRecord]:
         return records
 
 
+@kronicler.capture
 def write_bowling_records(
     records: list[BowlingRecord], path: Path = BOWLING_DB_PATH
 ) -> None:
@@ -155,7 +160,10 @@ def parse_add_args(args: tuple[str, ...]) -> tuple[Optional[dict], Optional[str]
     return None, "Record type must be `score`, `speed`, or `strike`."
 
 
-def format_bowling_records(records: list[BowlingRecord], guild: Optional[discord.Guild]) -> str:
+@kronicler.capture
+def format_bowling_records(
+    records: list[BowlingRecord], guild: Optional[discord.Guild]
+) -> str:
     lines = ["Bowling Records", "", "Top scores:"]
 
     scores = sorted(
