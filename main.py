@@ -6,6 +6,7 @@ import kronicler
 import activities
 import birthday
 import kronicler_report
+import bowling
 import subprocess
 
 
@@ -44,6 +45,11 @@ intents.members = True
 intents.guild_messages = True
 
 bot = commands.Bot(command_prefix=">", intents=intents)
+
+
+@bot.event
+async def setup_hook():
+    await bot.add_cog(bowling.Bowling(bot))
 
 daily_birthday_check = birthday.create_daily_birthday_check(bot, CHANNEL_ID)
 
