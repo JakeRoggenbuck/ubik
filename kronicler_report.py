@@ -6,6 +6,7 @@ from itertools import cycle
 
 import discord
 import matplotlib
+import seaborn as sns
 from discord.ext import commands
 
 matplotlib.use("Agg")
@@ -41,12 +42,33 @@ def create_runtime_plot(log_data: list[list]) -> io.BytesIO:
         variance = sum((x - mean_time) ** 2 for x in times) / len(times)
         stds.append(variance**0.5)
 
+    sns.set_theme(
+        style="darkgrid",
+        font="DejaVu Sans",
+        rc={
+            "axes.facecolor": "#262626",
+            "figure.facecolor": "#1b1b1b",
+            "text.color": "#f0f0f0",
+            "axes.labelcolor": "#f0f0f0",
+            "xtick.color": "#d8d8d8",
+            "ytick.color": "#d8d8d8",
+            "grid.color": "#3a3a3a",
+        },
+    )
     fig, ax = plt.subplots(figsize=(10, 4.5))
     color_cycle = cycle(PLOT_COLORS)
     bar_colors = [next(color_cycle) for _ in functions]
 
     x_pos = range(len(functions))
-    bars = ax.bar(x_pos, means, yerr=stds, capsize=10, alpha=0.7, color=bar_colors)
+    bars = ax.bar(
+        x_pos,
+        means,
+        yerr=stds,
+        capsize=10,
+        alpha=0.75,
+        color=bar_colors,
+        ecolor="#ffffff",
+    )
 
     ax.set_xlabel("Function Name", fontsize=12, fontweight="bold")
     ax.set_ylabel("Runtime (milliseconds)", fontsize=12, fontweight="bold")
@@ -81,7 +103,7 @@ def create_runtime_plot(log_data: list[list]) -> io.BytesIO:
             fontsize=9,
         )
 
-    fig.subplots_adjust(left=0.1, right=0.96, top=0.86, bottom=0.26)
+    fig.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.32)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150)
     buf.seek(0)

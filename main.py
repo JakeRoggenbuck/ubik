@@ -57,6 +57,7 @@ daily_birthday_check = birthday.create_daily_birthday_check(bot, CHANNEL_ID)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
+    await bot.change_presence(activity=discord.Game("Hey! Use '>help'"))
     daily_birthday_check.start()
 
 
