@@ -10,6 +10,8 @@ import discord
 from discord.ext import commands
 import kronicler
 
+# Idea credit: Kyle
+
 
 BOWLING_DB_PATH = Path("bowling_records.csv")
 CSV_FIELDS = ["timestamp", "user_id", "user_name", "record_type", "value", "unit"]
