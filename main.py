@@ -13,23 +13,11 @@ import bowling
 import antispam
 
 
-FEATURES = { "PRINT_SPAM_CHECK": True }
-
 BOT_CONFIG_PATH = Path("bot.toml")
 
 DB = kronicler.Database(sync_consume=True)
 
-good, bad = antispam.make_maps()
-
-if FEATURES["PRINT_SPAM_CHECK"]:
-    print("Looking through good.")
-    for word, val in good.items():
-        print(word, antispam.p_spam(word))
-
-    print("Looking through bad.")
-    for word, val in bad.items():
-        print(word, antispam.p_spam(word))
-
+print(antispam.classify_message("a"))
 
 @kronicler.capture
 def load_bot_config(path: Path) -> dict:
