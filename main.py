@@ -3,16 +3,21 @@ from discord.ext import commands
 from pathlib import Path
 import tomllib
 import kronicler
+import subprocess
+import hy
+
 import activities
 import birthday
 import kronicler_report
 import bowling
-import subprocess
+import antispam
 
 
 BOT_CONFIG_PATH = Path("bot.toml")
 
 DB = kronicler.Database(sync_consume=True)
+
+print(antispam.make_maps())
 
 
 @kronicler.capture
