@@ -33,3 +33,10 @@
                     (+
                       (r_bad w)
                       (r_good w))))))
+
+;; P.G. has a specific algorithm, but I'm going to try average
+
+;; (defn classify_message [message]
+;;   (setv words (.split message)
+;;       scores words)
+;;   (list scores))
