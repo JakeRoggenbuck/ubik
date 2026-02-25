@@ -30,3 +30,24 @@ birthdays = [
   { month = 1, day = 23, user_id = 12345, name = "Ubik" },
 ]
 ```
+
+## Notification streams
+
+Notification streams are configured in `notification_streams.toml`.
+Each stream points to a Python script that must implement:
+
+```python
+def get_new_events() -> list[str] | list[dict]:
+    ...
+```
+
+That script is responsible for deduplication (for example by storing event-name hashes in a local file) so only new events are returned on each run.
+
+### Commands
+
+- `>notify list`
+- `>notify signup <stream> [dm|channel]`
+- `>notify unsubscribe <stream>`
+- `>notify run` (manual run for testing)
+
+The bot runs notification stream checks once per day and sends notifications to subscribers either by DM or in the signup channel.

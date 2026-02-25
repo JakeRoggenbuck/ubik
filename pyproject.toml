@@ -11,4 +11,5 @@ dependencies = [
     "seaborn>=0.13.2",
     "ruff>=0.14.11",
     "hy>=1.2.0",
+    "requests>=2.32.5",
 ]

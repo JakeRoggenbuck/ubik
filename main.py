@@ -11,6 +11,7 @@ import birthday
 import kronicler_report
 import bowling
 import antispam
+import notifications
 
 
 FEATURES = { "PRINT_SPAM_CHECK": True }
@@ -68,13 +69,17 @@ async def setup_hook():
     await bot.add_cog(bowling.Bowling(bot))
 
 daily_birthday_check = birthday.create_daily_birthday_check(bot, CHANNEL_ID)
+daily_notification_check = notifications.create_daily_notification_check(bot)
 
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
     await bot.change_presence(activity=discord.Game("Hey! Use '>help'"))
-    daily_birthday_check.start()
+    if not daily_birthday_check.is_running():
+        daily_birthday_check.start()
+    if not daily_notification_check.is_running():
+        daily_notification_check.start()
 
 
 def format_timedelta(td):
@@ -109,6 +114,72 @@ async def birthdays(ctx):
     """List everyone's birthday"""
     birthdays = birthday.load_birthdays(birthday.BIRTHDAYS_PATH)
     await ctx.send(birthday.format_birthdays(birthdays))
+
+
+@bot.group(name="notify", invoke_without_command=True)
+async def notify_group(ctx):
+    """Notification stream utilities."""
+    await ctx.send(
+        "Use `>notify list`, `>notify signup <stream> [dm|channel]`, "
+        "`>notify unsubscribe <stream>`, or `>notify run`."
+    )
+
+
+@notify_group.command(name="list")
+async def notify_list(ctx):
+    """List available notification streams."""
+    names = notifications.list_stream_names(notifications.NOTIFICATION_STREAMS_PATH)
+    if not names:
+        await ctx.send("No notification streams are configured.")
+        return
+
+    await ctx.send("\n".join(["Notification streams:", "```", *names, "```"]))
+
+
+@notify_group.command(name="signup")
+async def notify_signup(ctx, stream: str, delivery: str = "dm"):
+    """Sign up for a notification stream."""
+    channel_id = ctx.channel.id if delivery.strip().lower() == "channel" else None
+    ok, message = await notifications.subscribe(
+        notifications.NOTIFICATION_STREAMS_PATH,
+        stream,
+        ctx.author.id,
+        delivery,
+        channel_id,
+    )
+    await ctx.send(message)
+    if ok and delivery.strip().lower() == "dm":
+        await ctx.send("You will receive notifications in DMs.")
+    elif ok:
+        await ctx.send(f"You will receive notifications in <#{ctx.channel.id}>.")
+
+
+@notify_group.command(name="unsubscribe")
+async def notify_unsubscribe(ctx, stream: str):
+    """Remove your notification stream subscription."""
+    _, message = await notifications.unsubscribe(
+        notifications.NOTIFICATION_STREAMS_PATH,
+        stream,
+        ctx.author.id,
+    )
+    await ctx.send(message)
+
+
+@notify_group.command(name="run")
+async def notify_run(ctx):
+    """Manually run all notification streams once."""
+    sent = await notifications.dispatch_notifications(
+        bot, notifications.NOTIFICATION_STREAMS_PATH
+    )
+    if not sent:
+        await ctx.send("No streams were processed.")
+        return
+
+    lines = ["Notification run complete:", "```"]
+    for stream, count in sorted(sent.items()):
+        lines.append(f"{stream}: {count} sent")
+    lines.append("```")
+    await ctx.send("\n".join(lines))
 
 
 @bot.group(name="birthday", invoke_without_command=True)
