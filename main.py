@@ -112,6 +112,9 @@ async def activity(ctx, limit: int = 1000):
 @bot.command()
 async def birthdays(ctx):
     """List everyone's birthday"""
+    if ctx.channel.id != CHANNEL_ID:
+        await ctx.send("This channel does not have permission for it.")
+        return
     birthdays = birthday.load_birthdays(birthday.BIRTHDAYS_PATH)
     await ctx.send(birthday.format_birthdays(birthdays))
 
