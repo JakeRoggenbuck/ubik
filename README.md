@@ -23,6 +23,14 @@
 python3 main.py
 ```
 
+To enable the `>update` command (git pull + restart), launch via the wrapper instead:
+
+```bash
+./run.sh
+```
+
+The wrapper relaunches the bot when it exits with code 42, which is what `>update` does after pulling. Set `admin_id` in `bot.toml` to the Discord user ID allowed to run `>update`.
+
 ## Example birthdays TOML
 
 ```toml

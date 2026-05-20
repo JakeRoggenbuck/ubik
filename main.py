@@ -4,6 +4,7 @@ from pathlib import Path
 import tomllib
 import kronicler
 import subprocess
+import sys
 import hy
 
 import activities
@@ -33,6 +34,8 @@ BOT_CONFIG = load_bot_config(BOT_CONFIG_PATH)
 
 CHANNEL_ID = int(BOT_CONFIG["channel_id"])
 INVITE_LINK = str(BOT_CONFIG.get("invite_link", "")).strip()
+ADMIN_ID = int(BOT_CONFIG.get("admin_id", 0))
+RESTART_EXIT_CODE = 42
 
 if "token" in BOT_CONFIG:
     TOKEN = str(BOT_CONFIG["token"]).strip()
@@ -220,6 +223,29 @@ async def commit(ctx):
 async def latex_command(ctx, *, expression: str = ""):
     """Render a LaTeX expression as an image. Usage: >latex e^{i\\pi} + 1 = 0"""
     await latex.send_latex(ctx, expression)
+
+
+@bot.command()
+async def update(ctx):
+    """Pull the latest code and restart the bot. Admin only."""
+    if ADMIN_ID == 0 or ctx.author.id != ADMIN_ID:
+        await ctx.send("You are not authorized to run this command.")
+        return
+
+    try:
+        result = subprocess.run(
+            ["git", "pull"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        await ctx.send(f"git pull failed:\n```\n{exc.stderr.strip() or exc.stdout.strip()}\n```")
+        return
+
+    await ctx.send(f"```\n{result.stdout.strip()}\n```\nRestarting...")
+    await bot.close()
+    sys.exit(RESTART_EXIT_CODE)
 
 
 @bot.command()
