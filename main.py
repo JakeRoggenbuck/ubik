@@ -11,6 +11,7 @@ import birthday
 import kronicler_report
 import bowling
 import antispam
+import latex
 import notifications
 
 
@@ -213,6 +214,12 @@ async def commit(ctx):
         return
 
     await ctx.send(result.stdout.strip())
+
+
+@bot.command(name="latex")
+async def latex_command(ctx, *, expression: str = ""):
+    """Render a LaTeX expression as an image. Usage: >latex e^{i\\pi} + 1 = 0"""
+    await latex.send_latex(ctx, expression)
 
 
 @bot.command()
