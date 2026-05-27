@@ -59,3 +59,38 @@ That script is responsible for deduplication (for example by storing event-name 
 - `>notify run` (manual run for testing)
 
 The bot runs notification stream checks once per day and sends notifications to subscribers either by DM or in the signup channel.
+
+## Pings with set operators
+
+`>ping` combines groups of members with set operations and pings the result.
+Plain `>ping` still just replies `pong`, and `>ping help` prints the full syntax.
+
+```bash
+>ping (@here & @Rusty Minecraft) can someone review my PR
+>ping (@here | @Rusty Minecraft) Hey there!
+>ping !(@here) you all missed it
+>ping (@Mods ^ @here) Hi
+```
+
+**Operands** (each resolves to a set of members):
+
+| Token       | Members                                              |
+| ----------- | ---------------------------------------------------- |
+| `@here`     | members that are currently online                    |
+| `@everyone` | every member of the server                           |
+| `@<role>`   | members with that role (names may contain spaces)    |
+| `<@&id>`    | a role mention (what Discord sends for a role)        |
+| `<@id>`     | a single member mention                              |
+
+**Operators** (loosest to tightest precedence):
+
+| Operator | Operation             | Meaning                          |
+| -------- | --------------------- | -------------------------------- |
+| `\|`     | union                 | in either group                  |
+| `^`      | symmetric difference  | in exactly one group             |
+| `&`      | intersection          | in both groups                   |
+| `!`      | complement (prefix)   | everyone **not** in the group    |
+| `( )`    | grouping              | controls evaluation order        |
+
+Bots are never pinged. Using `@here` requires the **Presence Intent** to be
+enabled for the bot in the Discord Developer Portal.
