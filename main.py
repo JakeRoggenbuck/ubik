@@ -98,7 +98,8 @@ async def ping(ctx, *, args: str = ""):
     Plain `>ping` replies "pong". Given a parenthesised target expression you
     can combine groups with set operators and ping the result, e.g.
     `>ping (@here & @Rusty Minecraft) can someone review my PR` or
-    `>ping (@here | @Rusty Minecraft) Hey there!`.
+    `>ping (@here | @Rusty Minecraft) Hey there!`. Run `>ping help` for the
+    full syntax (supports `&`, `|`, `^`, `!` and parentheses).
     """
     if not args.strip():
         await ctx.send("pong")

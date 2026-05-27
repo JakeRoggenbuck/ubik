@@ -15,15 +15,50 @@ Operands resolve to a *set* of members:
 
 Operators (lowest to highest precedence):
 
-    |   union          (members in either group)
-    &   intersection   (members in both groups)
+    |   union                 (members in either group)
+    ^   symmetric difference  (members in exactly one group)
+    &   intersection          (members in both groups)
+    !   complement            (everyone not in the group), unary prefix
 
-Parentheses group sub-expressions. The resolved members are pinged with the
-trailing message.
+Parentheses group sub-expressions, e.g. `!(@here)` is everyone who is not
+online. The resolved members are pinged with the trailing message.
 """
 
 import discord
 import kronicler
+
+
+HELP_TEXT = """\
+**Set-algebra pings**
+Ping the result of set operations over groups of members.
+
+**Usage:** `>ping (<expression>) your message`
+
+**Operands** (each resolves to a set of members):
+```
+@here        members that are currently online
+@everyone    every member of the server
+@<role>      members with that role (names may contain spaces)
+<@&id>       a role mention (Discord's autocompleted role)
+<@id>        a single member mention
+```
+**Operators** (loosest to tightest precedence):
+```
+|   union                 in either group
+^   symmetric difference  in exactly one group
+&   intersection          in both groups
+!   complement            everyone NOT in the group (prefix)
+( ) grouping
+```
+**Examples:**
+```
+>ping (@here & @Rusty Minecraft) can someone review my PR
+>ping (@here | @Rusty Minecraft) Hey there!
+>ping !(@here) you all missed it
+>ping (@Mods ^ @here) Hi
+>ping ((@here | @Mods) & @Rusty Minecraft) ping!
+```
+Bots are never pinged. Plain `>ping` replies "pong"."""
 
 
 def extract_group(text: str):
@@ -69,6 +104,12 @@ def tokenize(expr: str):
         elif char == "|":
             tokens.append(("op", "|"))
             i += 1
+        elif char == "^":
+            tokens.append(("op", "^"))
+            i += 1
+        elif char == "!":
+            tokens.append(("not", "!"))
+            i += 1
         elif char == "<":
             # A raw Discord mention like <@&123> (role) or <@123> (user).
             end = expr.find(">", i)
@@ -79,7 +120,7 @@ def tokenize(expr: str):
         elif char == "@":
             # A textual operand: read until the next operator/paren/mention.
             j = i + 1
-            while j < n and expr[j] not in "&|()<":
+            while j < n and expr[j] not in "&|^!()<":
                 j += 1
             name = expr[i + 1 : j].strip()
             if not name:
@@ -92,7 +133,10 @@ def tokenize(expr: str):
 
 
 class Parser:
-    """Recursive-descent parser. ``|`` binds looser than ``&``."""
+    """Recursive-descent parser.
+
+    Precedence, loosest to tightest: ``|`` then ``^`` then ``&`` then unary ``!``.
+    """
 
     def __init__(self, tokens):
         self.tokens = tokens
@@ -110,18 +154,31 @@ class Parser:
         return node
 
     def _parse_or(self):
-        node = self._parse_and()
+        node = self._parse_xor()
         while self._peek() == ("op", "|"):
             self.pos += 1
-            node = ("|", node, self._parse_and())
+            node = ("|", node, self._parse_xor())
+        return node
+
+    def _parse_xor(self):
+        node = self._parse_and()
+        while self._peek() == ("op", "^"):
+            self.pos += 1
+            node = ("^", node, self._parse_and())
         return node
 
     def _parse_and(self):
-        node = self._parse_atom()
+        node = self._parse_unary()
         while self._peek() == ("op", "&"):
             self.pos += 1
-            node = ("&", node, self._parse_atom())
+            node = ("&", node, self._parse_unary())
         return node
+
+    def _parse_unary(self):
+        if self._peek()[0] == "not":
+            self.pos += 1
+            return ("!", self._parse_unary())
+        return self._parse_atom()
 
     def _parse_atom(self):
         kind, value = self._peek()
@@ -135,7 +192,7 @@ class Parser:
         if kind == "operand":
             self.pos += 1
             return ("operand", value)
-        raise ValueError("Expected a target or '(' in target expression.")
+        raise ValueError("Expected a target, '!' or '(' in target expression.")
 
 
 def resolve_operand(value: str, guild: discord.Guild):
@@ -175,12 +232,16 @@ def evaluate(node, guild: discord.Guild):
     kind = node[0]
     if kind == "operand":
         return resolve_operand(node[1], guild)
+    if kind == "!":
+        return set(guild.members) - evaluate(node[1], guild)
     left = evaluate(node[1], guild)
     right = evaluate(node[2], guild)
     if kind == "&":
         return left & right
     if kind == "|":
         return left | right
+    if kind == "^":
+        return left ^ right
     raise ValueError(f"Unknown operator {kind!r}.")
 
 
@@ -214,11 +275,15 @@ async def send_pings(ctx, members, message: str):
 @kronicler.capture
 async def handle_ping(ctx, args: str):
     """Parse a target expression and ping the resulting set of members."""
+    if args.strip().lower() == "help":
+        await ctx.send(HELP_TEXT)
+        return
+
     if ctx.guild is None:
         await ctx.send("This command can only be used in a server.")
         return
 
-    usage = "Usage: `>ping (@here & @Role) your message`"
+    usage = "Usage: `>ping (@here & @Role) your message` — see `>ping help`."
 
     try:
         expr, message = extract_group(args)
