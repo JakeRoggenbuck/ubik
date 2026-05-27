@@ -57,7 +57,7 @@ intents.members = True
 intents.guild_messages = True
 intents.presences = True  # needed to resolve @here (member online status)
 
-bot = commands.Bot(command_prefix=">", intents=intents, help_command=None)
+bot = commands.Bot(command_prefix=">", intents=intents)
 
 
 @bot.tree.command(name="ping", description="Ping members using a set-algebra expression")

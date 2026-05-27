@@ -288,18 +288,39 @@ async def send_pings(ctx, members, message: str):
         await ctx.send(chunk, allowed_mentions=allowed)
 
 
+def _expression_prefix(current: str) -> tuple[str, str]:
+    """Split current expression into (typed_prefix, partial_operand).
+
+    The typed_prefix is everything up to and including the last operator/paren
+    (plus trailing spaces); partial_operand is the token being typed right now.
+    """
+    last_op = -1
+    for i, c in enumerate(current):
+        if c in "&|^!()":
+            last_op = i
+    if last_op == -1:
+        return "", current
+    split = last_op + 1
+    while split < len(current) and current[split] == " ":
+        split += 1
+    return current[:split], current[split:]
+
+
 def get_autocomplete_choices(
     guild: discord.Guild | None, current: str
 ) -> list[app_commands.Choice[str]]:
-    """Return up to 25 role/operand choices matching the current input."""
+    """Return up to 25 role/operand choices matching the token being typed."""
+    prefix, partial = _expression_prefix(current)
+    search = partial.lstrip("@").lower()
+
     candidates = ["@here", "@everyone"]
     if guild:
         for role in guild.roles:
             if not role.is_default():
                 candidates.append(role.name)
-    current_lower = current.lower()
-    matched = [c for c in candidates if current_lower in c.lower()]
-    return [app_commands.Choice(name=c, value=c) for c in matched[:25]]
+
+    matched = [c for c in candidates if search in c.lstrip("@").lower()]
+    return [app_commands.Choice(name=c, value=prefix + c) for c in matched[:25]]
 
 
 async def send_pings_interaction(
