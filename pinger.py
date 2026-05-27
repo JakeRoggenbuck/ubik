@@ -320,7 +320,10 @@ def get_autocomplete_choices(
                 candidates.append(role.name)
 
     matched = [c for c in candidates if search in c.lstrip("@").lower()]
-    return [app_commands.Choice(name=c, value=prefix + c) for c in matched[:25]]
+    return [
+        app_commands.Choice(name=(prefix + c)[:100], value=(prefix + c)[:100])
+        for c in matched[:25]
+    ]
 
 
 async def send_pings_interaction(
