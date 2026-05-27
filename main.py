@@ -15,6 +15,7 @@ import antispam
 import latex
 import notifications
 import pinger
+import hyeval
 
 
 BOT_CONFIG_PATH = Path("bot.toml")
@@ -258,6 +259,12 @@ async def update(ctx):
     await ctx.send(f"```\n{result.stdout.strip()}\n```\nRestarting...")
     await bot.close()
     sys.exit(RESTART_EXIT_CODE)
+
+
+@bot.command(name="eval")
+async def eval_command(ctx, *, source: str = ""):
+    """Evaluate Hy (Lisp) code and reply with the result. Admin only."""
+    await hyeval.handle_eval(ctx, ADMIN_ID, source)
 
 
 @bot.command()
