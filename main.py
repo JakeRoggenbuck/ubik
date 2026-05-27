@@ -272,6 +272,12 @@ async def eval_command(ctx, *, source: str = ""):
 
 
 @bot.command()
+async def source(ctx):
+    """Show the GitHub repository link."""
+    await ctx.send("https://github.com/JakeRoggenbuck/ubik")
+
+
+@bot.command()
 async def link(ctx):
     """Share the bot invite link."""
     if not INVITE_LINK:
