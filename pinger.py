@@ -3,13 +3,14 @@
 Lets a user ping the result of set operations over groups of members, e.g.
 
     >ping (@here & @Rusty Minecraft) Hey there!
-    >ping (@here | @Rusty Minecraft) Hey there!
+    /ping expression:@here & Rusty Minecraft message:Hey there!
 
 Operands resolve to a *set* of members:
 
     @here       members that are currently online
     @everyone   every (non-bot) member of the server
     @<role>     members that have the named role (names may contain spaces)
+    <role>      bare role name (no @ required, used by the slash command)
     <@&id>      a role mention (what Discord sends when you autocomplete a role)
     <@id>       a single member mention
 
@@ -25,6 +26,7 @@ online. The resolved members are pinged with the trailing message.
 """
 
 import discord
+from discord import app_commands
 import kronicler
 
 
@@ -32,13 +34,18 @@ HELP_TEXT = """\
 **Set-algebra pings**
 Ping the result of set operations over groups of members.
 
-**Usage:** `>ping (<expression>) your message`
+**Slash command (recommended):**
+`/ping expression:@here & Rusty Minecraft message:can someone review my PR`
+
+**Prefix command:**
+`>ping (<expression>) your message`
 
 **Operands** (each resolves to a set of members):
 ```
 @here        members that are currently online
 @everyone    every member of the server
 @<role>      members with that role (names may contain spaces)
+RoleName     bare role name (slash command, no @ needed)
 <@&id>       a role mention (Discord's autocompleted role)
 <@id>        a single member mention
 ```
@@ -52,10 +59,10 @@ Ping the result of set operations over groups of members.
 ```
 **Examples:**
 ```
+/ping expression:@here & Rusty Minecraft message:can someone review my PR
 >ping (@here & @Rusty Minecraft) can someone review my PR
 >ping (@here | @Rusty Minecraft) Hey there!
 >ping !(@here) you all missed it
->ping (@Mods ^ @here) Hi
 >ping ((@here | @Mods) & @Rusty Minecraft) ping!
 ```
 Bots are never pinged. Plain `>ping` replies "pong"."""
@@ -126,6 +133,15 @@ def tokenize(expr: str):
             if not name:
                 raise ValueError("Empty target after '@'.")
             tokens.append(("operand", "@" + name))
+            i = j
+        elif char.isalpha() or char == "_":
+            # A bare role name without '@' prefix (e.g. from the slash command).
+            j = i
+            while j < n and expr[j] not in "&|^!()<@":
+                j += 1
+            name = expr[i:j].strip()
+            if name:
+                tokens.append(("operand", "@" + name))
             i = j
         else:
             raise ValueError(f"Unexpected character {char!r} in target expression.")
@@ -270,6 +286,80 @@ async def send_pings(ctx, members, message: str):
 
     for chunk in chunks:
         await ctx.send(chunk, allowed_mentions=allowed)
+
+
+def get_autocomplete_choices(
+    guild: discord.Guild | None, current: str
+) -> list[app_commands.Choice[str]]:
+    """Return up to 25 role/operand choices matching the current input."""
+    candidates = ["@here", "@everyone"]
+    if guild:
+        for role in guild.roles:
+            if not role.is_default():
+                candidates.append(role.name)
+    current_lower = current.lower()
+    matched = [c for c in candidates if current_lower in c.lower()]
+    return [app_commands.Choice(name=c, value=c) for c in matched[:25]]
+
+
+async def send_pings_interaction(
+    interaction: discord.Interaction, members, message: str
+):
+    """Ping members via a slash command interaction, splitting at 2000 chars."""
+    allowed = discord.AllowedMentions(users=True, roles=False, everyone=False)
+
+    chunks: list[str] = []
+    current = ""
+    for member in members:
+        mention = member.mention
+        addition = mention if not current else " " + mention
+        if len(current) + len(addition) > 1900:
+            chunks.append(current)
+            current = mention
+        else:
+            current += addition
+    if current:
+        chunks.append(current)
+
+    if message:
+        if chunks and len(chunks[-1]) + 1 + len(message) <= 2000:
+            chunks[-1] += " " + message
+        else:
+            chunks.append(message)
+
+    first = True
+    for chunk in chunks:
+        if first:
+            await interaction.followup.send(chunk, allowed_mentions=allowed)
+            first = False
+        else:
+            await interaction.followup.send(chunk, allowed_mentions=allowed)
+
+
+async def handle_slash_ping(
+    interaction: discord.Interaction, expression: str, message: str
+):
+    """Handle the /ping application command."""
+    await interaction.response.defer()
+
+    if interaction.guild is None:
+        await interaction.followup.send("This command can only be used in a server.")
+        return
+
+    try:
+        node = Parser(tokenize(expression)).parse()
+        members = evaluate(node, interaction.guild)
+    except ValueError as exc:
+        await interaction.followup.send(f"⚠️ {exc}")
+        return
+
+    members = {m for m in members if not m.bot}
+    if not members:
+        await interaction.followup.send("No members matched that expression.")
+        return
+
+    ordered = sorted(members, key=lambda m: m.display_name.lower())
+    await send_pings_interaction(interaction, ordered, message)
 
 
 @kronicler.capture

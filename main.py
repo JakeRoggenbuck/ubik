@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 from pathlib import Path
 import tomllib
@@ -56,12 +57,30 @@ intents.members = True
 intents.guild_messages = True
 intents.presences = True  # needed to resolve @here (member online status)
 
-bot = commands.Bot(command_prefix=">", intents=intents)
+bot = commands.Bot(command_prefix=">", intents=intents, help_command=None)
+
+
+@bot.tree.command(name="ping", description="Ping members using a set-algebra expression")
+@app_commands.describe(
+    expression="Set expression over roles/users, e.g. @here & Rusty Minecraft",
+    message="Message to send with the ping",
+)
+async def slash_ping(interaction: discord.Interaction, expression: str, message: str):
+    await pinger.handle_slash_ping(interaction, expression, message)
+
+
+@slash_ping.autocomplete("expression")
+async def ping_expression_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    return pinger.get_autocomplete_choices(interaction.guild, current)
 
 
 @bot.event
 async def setup_hook():
     await bot.add_cog(bowling.Bowling(bot))
+    await bot.tree.sync()
 
 daily_birthday_check = birthday.create_daily_birthday_check(bot, CHANNEL_ID)
 daily_notification_check = notifications.create_daily_notification_check(bot)
@@ -70,7 +89,7 @@ daily_notification_check = notifications.create_daily_notification_check(bot)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
-    await bot.change_presence(activity=discord.Game("Hey! Use '>help'"))
+    await bot.change_presence(activity=discord.Game("Hey! Use '/ping'"))
     if not daily_birthday_check.is_running():
         daily_birthday_check.start()
     if not daily_notification_check.is_running():
@@ -91,21 +110,6 @@ def format_timedelta(td):
         return f"{minutes}m {secs}s ago"
     return f"{secs}s ago"
 
-
-@bot.command()
-async def ping(ctx, *, args: str = ""):
-    """Ping a set of members, or check the bot is alive.
-
-    Plain `>ping` replies "pong". Given a parenthesised target expression you
-    can combine groups with set operators and ping the result, e.g.
-    `>ping (@here & @Rusty Minecraft) can someone review my PR` or
-    `>ping (@here | @Rusty Minecraft) Hey there!`. Run `>ping help` for the
-    full syntax (supports `&`, `|`, `^`, `!` and parentheses).
-    """
-    if not args.strip():
-        await ctx.send("pong")
-        return
-    await pinger.handle_ping(ctx, args)
 
 
 @bot.command()
