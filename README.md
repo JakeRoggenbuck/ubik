@@ -31,7 +31,66 @@ To enable the `>update` command (git pull + restart), launch via the wrapper ins
 
 The wrapper relaunches the bot when it exits with code 42, which is what `>update` does after pulling. Set `admin_id` in `bot.toml` to the Discord user ID allowed to run `>update`.
 
-## Example birthdays TOML
+## Commands
+
+### Ping
+
+Ping a computed set of members using set-algebra expressions.
+
+**Slash command (recommended):**
+
+```
+/ping expression:<expr> message:<text>
+```
+
+The `expression` field has autocomplete — type a role name or `@here` and select from the dropdown. Operators (`&`, `|`, `^`, `!`) must be typed manually between selections.
+
+```
+/ping expression:@here & Rusty Minecraft message:can someone review my PR
+/ping expression:@here | Mods message:Hey there!
+/ping expression:!(@here) message:you all missed it
+```
+
+**Operands:**
+
+| Token       | Members                                           |
+| ----------- | ------------------------------------------------- |
+| `@here`     | members currently online                          |
+| `@everyone` | every member of the server                        |
+| `@<role>`   | members with that role (names may contain spaces) |
+| `<@&id>`    | a role mention                                    |
+| `<@id>`     | a single member mention                           |
+
+**Operators** (loosest to tightest precedence):
+
+| Operator | Meaning                       |
+| -------- | ----------------------------- |
+| `\|`     | union — in either group       |
+| `^`      | symmetric difference — in exactly one group |
+| `&`      | intersection — in both groups |
+| `!`      | complement — everyone **not** in the group |
+| `( )`    | grouping                      |
+
+Bots are never pinged. `@here` requires the **Presence Intent** enabled in the Discord Developer Portal.
+
+### Activity
+
+```
+>activity [limit]
+```
+
+Shows message counts per member in the server. `limit` defaults to 1000 messages scanned.
+
+### Birthdays
+
+```
+>birthdays
+>birthday channel check
+```
+
+Lists everyone's birthday (channel-restricted). `>birthday channel check` sends a test message to the configured announcements channel.
+
+Configure birthdays in `birthdays.toml`:
 
 ```toml
 birthdays = [
@@ -39,58 +98,45 @@ birthdays = [
 ]
 ```
 
-## Notification streams
+### Notifications
 
-Notification streams are configured in `notification_streams.toml`.
-Each stream points to a Python script that must implement:
+Notification streams are configured in `notification_streams.toml`. Each stream points to a Python script implementing:
 
 ```python
-def get_new_events() -> list[str] | list[dict]:
-    ...
+def get_new_events() -> list[str] | list[dict]: ...
 ```
 
-That script is responsible for deduplication (for example by storing event-name hashes in a local file) so only new events are returned on each run.
+The script handles deduplication so only new events are returned each run. The bot checks streams once daily.
 
-### Commands
-
-- `>notify list`
-- `>notify signup <stream> [dm|channel]`
-- `>notify unsubscribe <stream>`
-- `>notify run` (manual run for testing)
-
-The bot runs notification stream checks once per day and sends notifications to subscribers either by DM or in the signup channel.
-
-## Pings with set operators
-
-`>ping` combines groups of members with set operations and pings the result.
-Plain `>ping` still just replies `pong`, and `>ping help` prints the full syntax.
-
-```bash
->ping (@here & @Rusty Minecraft) can someone review my PR
->ping (@here | @Rusty Minecraft) Hey there!
->ping !(@here) you all missed it
->ping (@Mods ^ @here) Hi
+```
+>notify list                          — list available streams
+>notify signup <stream> [dm|channel]  — subscribe
+>notify unsubscribe <stream>          — unsubscribe
+>notify run                           — manually trigger all streams
 ```
 
-**Operands** (each resolves to a set of members):
+### LaTeX
 
-| Token       | Members                                              |
-| ----------- | ---------------------------------------------------- |
-| `@here`     | members that are currently online                    |
-| `@everyone` | every member of the server                           |
-| `@<role>`   | members with that role (names may contain spaces)    |
-| `<@&id>`    | a role mention (what Discord sends for a role)        |
-| `<@id>`     | a single member mention                              |
+```
+>latex <expression>
+```
 
-**Operators** (loosest to tightest precedence):
+Renders a LaTeX expression as an image. Example: `>latex e^{i\pi} + 1 = 0`
 
-| Operator | Operation             | Meaning                          |
-| -------- | --------------------- | -------------------------------- |
-| `\|`     | union                 | in either group                  |
-| `^`      | symmetric difference  | in exactly one group             |
-| `&`      | intersection          | in both groups                   |
-| `!`      | complement (prefix)   | everyone **not** in the group    |
-| `( )`    | grouping              | controls evaluation order        |
+### Kronicler
 
-Bots are never pinged. Using `@here` requires the **Presence Intent** to be
-enabled for the bot in the Discord Developer Portal.
+```
+>kronicler
+```
+
+Shows a runtime plot from kronicler data.
+
+### Utility
+
+```
+>commit   — show the latest git commit hash and date
+>source   — show the GitHub repository link
+>link     — show the bot invite link
+>update   — git pull and restart (admin only)
+>eval     — evaluate Hy (Lisp) code (admin only)
+```

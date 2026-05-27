@@ -1,93 +1,18 @@
-"""Set-algebra pings.
-
-Lets a user ping the result of set operations over groups of members, e.g.
-
-    >ping (@here & @Rusty Minecraft) Hey there!
-    /ping expression:@here & Rusty Minecraft message:Hey there!
+"""Set-algebra pings for the /ping slash command.
 
 Operands resolve to a *set* of members:
 
-    @here       members that are currently online
-    @everyone   every (non-bot) member of the server
-    @<role>     members that have the named role (names may contain spaces)
-    <role>      bare role name (no @ required, used by the slash command)
-    <@&id>      a role mention (what Discord sends when you autocomplete a role)
-    <@id>       a single member mention
+    @here / here    members currently online
+    @everyone       every (non-bot) member of the server
+    @<role> / role  members with that role (names may contain spaces)
+    <@&id>          a role mention
+    <@id>           a single member mention
 
-Operators (lowest to highest precedence):
-
-    |   union                 (members in either group)
-    ^   symmetric difference  (members in exactly one group)
-    &   intersection          (members in both groups)
-    !   complement            (everyone not in the group), unary prefix
-
-Parentheses group sub-expressions, e.g. `!(@here)` is everyone who is not
-online. The resolved members are pinged with the trailing message.
+Operators (lowest to highest precedence): | ^ & ! ( )
 """
 
 import discord
 from discord import app_commands
-import kronicler
-
-
-HELP_TEXT = """\
-**Set-algebra pings**
-Ping the result of set operations over groups of members.
-
-**Slash command (recommended):**
-`/ping expression:@here & Rusty Minecraft message:can someone review my PR`
-
-**Prefix command:**
-`>ping (<expression>) your message`
-
-**Operands** (each resolves to a set of members):
-```
-@here        members that are currently online
-@everyone    every member of the server
-@<role>      members with that role (names may contain spaces)
-RoleName     bare role name (slash command, no @ needed)
-<@&id>       a role mention (Discord's autocompleted role)
-<@id>        a single member mention
-```
-**Operators** (loosest to tightest precedence):
-```
-|   union                 in either group
-^   symmetric difference  in exactly one group
-&   intersection          in both groups
-!   complement            everyone NOT in the group (prefix)
-( ) grouping
-```
-**Examples:**
-```
-/ping expression:@here & Rusty Minecraft message:can someone review my PR
->ping (@here & @Rusty Minecraft) can someone review my PR
->ping (@here | @Rusty Minecraft) Hey there!
->ping !(@here) you all missed it
->ping ((@here | @Mods) & @Rusty Minecraft) ping!
-```
-Bots are never pinged. Plain `>ping` replies "pong"."""
-
-
-def extract_group(text: str):
-    """Split ``(expr) message`` into the parenthesised expression and the rest.
-
-    Returns ``(expr, message)``. Raises ``ValueError`` when the leading group is
-    missing or unbalanced.
-    """
-    text = text.lstrip()
-    if not text.startswith("("):
-        raise ValueError("Expected the targets in parentheses, e.g. `(@here & @Role)`.")
-
-    depth = 0
-    for i, char in enumerate(text):
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return text[1:i], text[i + 1 :].strip()
-
-    raise ValueError("Unbalanced parentheses in the target expression.")
 
 
 def tokenize(expr: str):
@@ -261,32 +186,6 @@ def evaluate(node, guild: discord.Guild):
     raise ValueError(f"Unknown operator {kind!r}.")
 
 
-async def send_pings(ctx, members, message: str):
-    """Ping the given members, splitting across messages to stay under 2000 chars."""
-    allowed = discord.AllowedMentions(users=True, roles=False, everyone=False)
-
-    chunks = []
-    current = ""
-    for member in members:
-        mention = member.mention
-        addition = mention if not current else " " + mention
-        if len(current) + len(addition) > 1900:
-            chunks.append(current)
-            current = mention
-        else:
-            current += addition
-    if current:
-        chunks.append(current)
-
-    if message:
-        if chunks and len(chunks[-1]) + 1 + len(message) <= 2000:
-            chunks[-1] += " " + message
-        else:
-            chunks.append(message)
-
-    for chunk in chunks:
-        await ctx.send(chunk, allowed_mentions=allowed)
-
 
 def _expression_prefix(current: str) -> tuple[str, str]:
     """Split current expression into (typed_prefix, partial_operand).
@@ -386,31 +285,3 @@ async def handle_slash_ping(
     await send_pings_interaction(interaction, ordered, message)
 
 
-@kronicler.capture
-async def handle_ping(ctx, args: str):
-    """Parse a target expression and ping the resulting set of members."""
-    if args.strip().lower() == "help":
-        await ctx.send(HELP_TEXT)
-        return
-
-    if ctx.guild is None:
-        await ctx.send("This command can only be used in a server.")
-        return
-
-    usage = "Usage: `>ping (@here & @Role) your message` — see `>ping help`."
-
-    try:
-        expr, message = extract_group(args)
-        node = Parser(tokenize(expr)).parse()
-        members = evaluate(node, ctx.guild)
-    except ValueError as exc:
-        await ctx.send(f"⚠️ {exc}\n{usage}")
-        return
-
-    members = {m for m in members if not m.bot}
-    if not members:
-        await ctx.send("No members matched that expression.")
-        return
-
-    ordered = sorted(members, key=lambda m: m.display_name.lower())
-    await send_pings(ctx, ordered, message)
