@@ -14,6 +14,7 @@ import bowling
 import antispam
 import latex
 import notifications
+import pinger
 
 
 BOT_CONFIG_PATH = Path("bot.toml")
@@ -52,6 +53,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.guild_messages = True
+intents.presences = True  # needed to resolve @here (member online status)
 
 bot = commands.Bot(command_prefix=">", intents=intents)
 
@@ -90,9 +92,18 @@ def format_timedelta(td):
 
 
 @bot.command()
-async def ping(ctx):
-    """Use the >ping command to see if Ubik is working..."""
-    await ctx.send("pong")
+async def ping(ctx, *, args: str = ""):
+    """Ping a set of members, or check the bot is alive.
+
+    Plain `>ping` replies "pong". Given a parenthesised target expression you
+    can combine groups with set operators and ping the result, e.g.
+    `>ping (@here & @Rusty Minecraft) can someone review my PR` or
+    `>ping (@here | @Rusty Minecraft) Hey there!`.
+    """
+    if not args.strip():
+        await ctx.send("pong")
+        return
+    await pinger.handle_ping(ctx, args)
 
 
 @bot.command()
