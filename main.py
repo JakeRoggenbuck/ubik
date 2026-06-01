@@ -17,6 +17,7 @@ import latex
 import notifications
 import pinger
 import hyeval
+import audit_log
 
 
 BOT_CONFIG_PATH = Path("bot.toml")
@@ -84,6 +85,11 @@ async def setup_hook():
 
 daily_birthday_check = birthday.create_daily_birthday_check(bot, CHANNEL_ID)
 daily_notification_check = notifications.create_daily_notification_check(bot)
+
+
+@bot.event
+async def on_message_delete(message: discord.Message):
+    await audit_log.on_message_delete(message)
 
 
 @bot.event
