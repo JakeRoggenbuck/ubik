@@ -277,6 +277,15 @@ async def eval_command(ctx, *, source: str = ""):
     await hyeval.handle_eval(ctx, ADMIN_ID, source)
 
 
+@bot.command(name="auditlog", hidden=True)
+async def auditlog_command(ctx, *, keyword: str = ""):
+    """View the audit log. Admin only. Optionally filter by keyword."""
+    if ADMIN_ID == 0 or ctx.author.id != ADMIN_ID:
+        await ctx.send("You are not authorized to run this command.")
+        return
+    await ctx.send(audit_log.read_audit_log(keyword.strip() or None))
+
+
 @bot.command()
 async def source(ctx):
     """Show the GitHub repository link."""
