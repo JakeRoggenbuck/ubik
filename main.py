@@ -93,6 +93,22 @@ async def on_message_delete(message: discord.Message):
 
 
 @bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    if str(payload.emoji) != "👍":
+        return
+    url = notifications._PENDING_LINKS.get(payload.message_id)
+    if url is None:
+        return
+    if payload.user_id == bot.user.id:
+        return
+    try:
+        user = await bot.fetch_user(payload.user_id)
+        await user.send(url)
+    except Exception as exc:
+        print(f"Failed to DM link to {payload.user_id}: {exc}")
+
+
+@bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
     await bot.change_presence(activity=discord.Game("Hey! Use '/ping'"))
@@ -181,6 +197,25 @@ async def notify_unsubscribe(ctx, stream: str):
         ctx.author.id,
     )
     await ctx.send(message)
+
+
+@notify_group.command(name="post")
+async def notify_post(ctx, stream: str, url: str):
+    """Send a URL as a manual event to a stream. Admin only."""
+    if ADMIN_ID == 0 or ctx.author.id != ADMIN_ID:
+        await ctx.send("You are not authorized to run this command.")
+        return
+
+    await ctx.send(f"Fetching `{url}` and sending to `{stream}`...")
+    found, err, sent = await notifications.send_url_to_stream(
+        bot, notifications.NOTIFICATION_STREAMS_PATH, stream, url
+    )
+    if not found:
+        await ctx.send(err)
+    elif sent == 0:
+        await ctx.send("No subscribers on that stream.")
+    else:
+        await ctx.send(f"Sent to {sent} subscriber(s).")
 
 
 @notify_group.command(name="run")
