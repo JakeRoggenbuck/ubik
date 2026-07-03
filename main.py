@@ -18,6 +18,7 @@ import notifications
 import pinger
 import hyeval
 import audit_log
+import link_log
 
 
 BOT_CONFIG_PATH = Path("bot.toml")
@@ -104,6 +105,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     try:
         user = await bot.fetch_user(payload.user_id)
         await user.send(url)
+        link_log.record(user.id, str(user), url)
     except Exception as exc:
         print(f"Failed to DM link to {payload.user_id}: {exc}")
 
@@ -197,6 +199,15 @@ async def notify_unsubscribe(ctx, stream: str):
         ctx.author.id,
     )
     await ctx.send(message)
+
+
+@notify_group.command(name="links")
+async def notify_links(ctx, limit: int = 50):
+    """Show who has received event links. Admin only."""
+    if ADMIN_ID == 0 or ctx.author.id != ADMIN_ID:
+        await ctx.send("You are not authorized to run this command.")
+        return
+    await ctx.send(link_log.read_log(limit))
 
 
 @notify_group.command(name="post")
