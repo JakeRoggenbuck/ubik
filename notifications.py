@@ -280,9 +280,8 @@ async def _send_to_subscriber(
         raise RuntimeError(f"Channel {sub.channel_id} is not messageable")
 
     msg = await channel.send(
-        f"@here {content}",
+        f"<@{sub.user_id}> {content}",
         embed=embed,
-        allowed_mentions=discord.AllowedMentions(everyone=True),
     )
     if url:
         _PENDING_LINKS[msg.id] = url
