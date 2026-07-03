@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 from datetime import time, timedelta, timezone
 from importlib.util import module_from_spec, spec_from_file_location
@@ -8,6 +9,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import aiohttp
 import discord
 from discord.ext import tasks
 import kronicler
@@ -16,6 +18,9 @@ import tomllib
 
 NOTIFICATION_STREAMS_PATH = Path("notification_streams.toml")
 MY_TIMEZONE = timezone(timedelta(hours=-8))
+
+# Maps sent message IDs to their hidden URLs so reactions can trigger DM delivery.
+_PENDING_LINKS: dict[int, str] = {}
 
 
 @dataclass(slots=True)
@@ -208,31 +213,58 @@ def load_stream_module(path: Path) -> ModuleType:
 
 
 @kronicler.capture
-def _event_to_message(stream_name: str, event: Any) -> str:
+def _event_to_content(stream_name: str, event: Any) -> tuple[str, str | None]:
+    """Return (display_text, url_or_None). URL is always stripped from display text."""
     prefix = f"[{stream_name}]"
     if isinstance(event, str):
-        return f"{prefix} {event}"
+        return f"{prefix} {event}", None
 
     if isinstance(event, dict):
-        message = str(event.get("message") or event.get("title") or "New event")
+        title = str(event.get("message") or event.get("title") or "New event")
         details = str(event.get("details") or event.get("body") or "").strip()
-        url = str(event.get("url") or "").strip()
+        url = str(event.get("url") or "").strip() or None
 
-        lines = [f"{prefix} {message}"]
+        lines = [f"{prefix} {title}"]
         if details:
             lines.append(details)
-        if url:
-            lines.append(url)
-        return "\n".join(lines)
+        return "\n".join(lines), url
 
-    return f"{prefix} {event}"
+    return f"{prefix} {event}", None
+
+
+async def _fetch_og_data(url: str) -> dict[str, str | None]:
+    """Return og:title and og:image scraped from url, or None for each if missing."""
+    def _og_match(html: str, prop: str) -> str | None:
+        m = re.search(
+            rf'<meta[^>]+property=["\']og:{prop}["\'][^>]+content=["\']([^"\']+)["\']'
+            rf'|<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:{prop}["\']',
+            html,
+        )
+        return (m.group(1) or m.group(2)) if m else None
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    return {"title": None, "image": None}
+                html = await resp.text()
+        return {"title": _og_match(html, "title"), "image": _og_match(html, "image")}
+    except Exception:
+        return {"title": None, "image": None}
 
 
 @kronicler.capture
-async def _send_to_subscriber(bot: discord.Client, sub: Subscriber, message: str):
+async def _send_to_subscriber(
+    bot: discord.Client,
+    sub: Subscriber,
+    content: str,
+    embed: discord.Embed | None = None,
+    url: str | None = None,
+):
     if sub.delivery == "dm":
         user = await bot.fetch_user(sub.user_id)
-        await user.send(message)
+        dm_content = f"{content}\n{url}" if url else content
+        await user.send(dm_content)
         return
 
     if sub.channel_id is None:
@@ -247,7 +279,50 @@ async def _send_to_subscriber(bot: discord.Client, sub: Subscriber, message: str
     if not isinstance(channel, discord.abc.Messageable):
         raise RuntimeError(f"Channel {sub.channel_id} is not messageable")
 
-    await channel.send(f"<@{sub.user_id}> {message}")
+    msg = await channel.send(
+        f"@here {content}",
+        embed=embed,
+        allowed_mentions=discord.AllowedMentions(everyone=True),
+    )
+    if url:
+        _PENDING_LINKS[msg.id] = url
+        await msg.add_reaction("👍")
+
+
+@kronicler.capture
+async def send_url_to_stream(
+    bot: discord.Client,
+    path: Path,
+    stream_name: str,
+    url: str,
+) -> tuple[bool, str, int]:
+    """Manually send a URL as an event to all subscribers of a stream.
+
+    Returns (found, error_message, sent_count).
+    """
+    streams = load_streams(path)
+    stream = _find_stream(streams, stream_name)
+    if stream is None:
+        return False, f"Unknown stream `{stream_name}`.", 0
+
+    og = await _fetch_og_data(url)
+    title = og["title"] or url
+    content = f"[{stream.name}] {title}"
+
+    embed = discord.Embed()
+    if og["image"]:
+        embed.set_image(url=og["image"])
+    embed.set_footer(text="React with 👍 to receive the link via DM")
+
+    sent = 0
+    for sub in stream.subscribers:
+        try:
+            await _send_to_subscriber(bot, sub, content, embed=embed, url=url)
+            sent += 1
+        except Exception as exc:
+            print(f"Failed to send manual notification to {sub.user_id}: {exc}")
+
+    return True, "", sent
 
 
 @kronicler.capture
@@ -289,10 +364,19 @@ async def dispatch_notifications(
 
         sent_count = 0
         for event in events:
-            message = _event_to_message(stream.name, event)
+            content, url = _event_to_content(stream.name, event)
+
+            embed: discord.Embed | None = None
+            if url:
+                og = await _fetch_og_data(url)
+                embed = discord.Embed()
+                if og["image"]:
+                    embed.set_image(url=og["image"])
+                embed.set_footer(text="React with 👍 to receive the link via DM")
+
             for sub in stream.subscribers:
                 try:
-                    await _send_to_subscriber(bot, sub, message)
+                    await _send_to_subscriber(bot, sub, content, embed=embed, url=url)
                     sent_count += 1
                 except Exception as exc:
                     print(
