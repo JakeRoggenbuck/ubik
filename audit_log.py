@@ -7,17 +7,23 @@ MAX_CHARS = 1900  # leave room for code block markers
 
 AUDIT_LOG_PATH = Path("audit.log")
 
+# General logging (e.g. discord.py's gateway/reconnect chatter) stays on the
+# root logger and only goes to stdout.
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(message)s",
     datefmt="%Y-%m-%dT%H:%M:%S",
-    handlers=[
-        logging.FileHandler(AUDIT_LOG_PATH, encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
+    handlers=[logging.StreamHandler()],
 )
 
+# Audit events get their own file and don't propagate to the root logger, so
+# unrelated noise (like reconnects) never ends up in audit.log.
 audit_logger = logging.getLogger("audit")
+audit_logger.propagate = False
+audit_logger.setLevel(logging.INFO)
+_audit_handler = logging.FileHandler(AUDIT_LOG_PATH, encoding="utf-8")
+_audit_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%Y-%m-%dT%H:%M:%S"))
+audit_logger.addHandler(_audit_handler)
 
 
 async def on_message_delete(message: discord.Message):
