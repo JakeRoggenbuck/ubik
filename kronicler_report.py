@@ -73,7 +73,7 @@ def create_runtime_plot(log_data: list[list]) -> io.BytesIO:
     ax.set_xlabel("Function Name", fontsize=12, fontweight="bold")
     ax.set_ylabel("Runtime (milliseconds)", fontsize=12, fontweight="bold")
     ax.set_title(
-        "Function Runtime Analysis\n(Mean with Standard Deviation)",
+        f"Function Runtime Analysis\n(Mean with Standard Deviation) — {len(log_data)} logs total",
         fontsize=14,
         fontweight="bold",
     )
@@ -125,5 +125,6 @@ async def send_runtime_plot(ctx: commands.Context, db: kronicler.Database):
         return
 
     await ctx.send(
+        content=f"Kronicler has recorded {len(log_data)} logs.",
         file=discord.File(image_buffer, filename="runtime_analysis.png"),
     )
